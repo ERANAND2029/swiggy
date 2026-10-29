@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: swiggy-food-detector
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
