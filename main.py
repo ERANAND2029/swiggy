@@ -2,6 +2,7 @@ import os
 import io
 import time
 import base64
+import gc
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException
@@ -12,11 +13,32 @@ from pydantic import BaseModel
 from PIL import Image
 import numpy as np
 import cv2
+
+# PyTorch low-memory and CPU thread optimization for Render Free Tier (512MB RAM)
+import torch
+torch.set_grad_enabled(False)
+# Limit CPU threads to prevent CPU spikes and excessive memory pooling on Render
+try:
+    torch.set_num_threads(2)
+except Exception:
+    pass
+
+# Ensure PyTorch 2.6+ unpickler allows Ultralytics DetectionModel
+try:
+    import ultralytics.nn.tasks
+    if hasattr(torch.serialization, "add_safe_globals"):
+        torch.serialization.add_safe_globals([
+            ultralytics.nn.tasks.DetectionModel,
+            ultralytics.nn.tasks.BaseModel,
+        ])
+except Exception as e:
+    print(f"Safe globals warning (non-fatal): {e}")
+
 from ultralytics import YOLO
 
-app = FastAPI(title="Indian Food Live Detector", version="1.0.0")
+app = FastAPI(title="Indian Food Live Detector (YOLO 26l)", version="2.0.0")
 
-# Enable CORS for local testing and cross-origin clients
+# Enable CORS for cross-origin clients and mobile access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Colors palette for the classes
+# Colors palette for the 8 Indian food classes
 CLASS_COLORS = {
     "chillipotato": "#ef4444",  # Red
     "dosa": "#f59e0b",          # Amber
@@ -41,10 +63,46 @@ CLASS_COLORS = {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.getenv("MODEL_PATH", os.path.join(BASE_DIR, "model", "detectanand.pt"))
 
-print(f"Loading YOLO Model from {MODEL_PATH}...")
-model = YOLO(MODEL_PATH)
-CLASS_NAMES = model.names if hasattr(model, "names") else {}
-print(f"Model loaded successfully with classes: {CLASS_NAMES}")
+# Lazy load model with error capture so server starts reliably
+model = None
+model_load_error = None
+CLASS_NAMES = {
+    0: 'chillipotato', 1: 'dosa', 2: 'kaju katli', 3: 'ladu',
+    4: 'momos', 5: 'panner tikka', 6: 'samosa', 7: 'vada pav'
+}
+
+
+def load_model_instance():
+    global model, model_load_error, CLASS_NAMES
+    if model is not None:
+        return model
+    try:
+        print(f"Loading YOLO26l Model from {MODEL_PATH}...")
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
+        
+        loaded = YOLO(MODEL_PATH)
+        if hasattr(loaded, "names") and loaded.names:
+            CLASS_NAMES = loaded.names
+        
+        # Warmup model once with small input to prevent first-request lag
+        dummy = np.zeros((320, 320, 3), dtype=np.uint8)
+        loaded.predict(dummy, imgsz=320, verbose=False)
+        
+        model = loaded
+        print(f"YOLO26l loaded successfully! Detected classes: {CLASS_NAMES}")
+        return model
+    except Exception as e:
+        model_load_error = str(e)
+        print(f"CRITICAL: Failed to load YOLO26l model: {e}")
+        return None
+
+
+# Preload model at startup
+@app.on_event("startup")
+def startup_event():
+    load_model_instance()
+
 
 # Serve static assets
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -57,13 +115,20 @@ class Base64DetectRequest(BaseModel):
     conf: Optional[float] = 0.25
     iou: Optional[float] = 0.45
     return_annotated: Optional[bool] = False
+    imgsz: Optional[int] = 480
 
 
-def run_yolo_detection(image: Image.Image, conf: float = 0.25, iou: float = 0.45, return_annotated: bool = True):
+def run_yolo_detection(image: Image.Image, conf: float = 0.25, iou: float = 0.45, return_annotated: bool = True, imgsz: int = 480):
+    m = load_model_instance()
+    if m is None:
+        raise RuntimeError(f"YOLO26l model failed to load on server: {model_load_error}")
+
     start_time = time.time()
     
-    # Run Ultralytics inference
-    results = model.predict(image, conf=conf, iou=iou, verbose=False)
+    # Run inference with memory efficiency
+    with torch.inference_mode():
+        results = m.predict(image, conf=conf, iou=iou, imgsz=imgsz, verbose=False)
+        
     infer_ms = round((time.time() - start_time) * 1000, 1)
 
     result = results[0]
@@ -81,12 +146,12 @@ def run_yolo_detection(image: Image.Image, conf: float = 0.25, iou: float = 0.45
             cls_name = CLASS_NAMES.get(cls_id, f"Class {cls_id}")
             x1, y1, x2, y2 = [round(float(coord), 1) for coord in box]
 
-            # Normalize coordinates (0-1) for flexible client-side rendering
+            # Normalize coordinates (0-1) for client canvas rendering
             norm_box = [
-                round(x1 / orig_w, 4),
-                round(y1 / orig_h, 4),
-                round(x2 / orig_w, 4),
-                round(y2 / orig_h, 4),
+                round(max(0.0, min(1.0, x1 / orig_w)), 4),
+                round(max(0.0, min(1.0, y1 / orig_h)), 4),
+                round(max(0.0, min(1.0, x2 / orig_w)), 4),
+                round(max(0.0, min(1.0, y2 / orig_h)), 4),
             ]
 
             color = CLASS_COLORS.get(cls_name.lower(), "#3b82f6")
@@ -102,14 +167,12 @@ def run_yolo_detection(image: Image.Image, conf: float = 0.25, iou: float = 0.45
 
     annotated_base64 = None
     if return_annotated:
-        # result.plot() returns BGR numpy array
         plotted_bgr = result.plot()
-        # Convert BGR to RGB
         plotted_rgb = cv2.cvtColor(plotted_bgr, cv2.COLOR_BGR2RGB)
         pil_res = Image.fromarray(plotted_rgb)
         
         buffered = io.BytesIO()
-        pil_res.save(buffered, format="JPEG", quality=85)
+        pil_res.save(buffered, format="JPEG", quality=80)
         annotated_base64 = "data:image/jpeg;base64," + base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     return {
@@ -133,9 +196,12 @@ async def serve_index():
 
 @app.get("/health")
 async def health_check():
+    m = load_model_instance()
     return {
-        "status": "ok",
-        "service": "Indian Food Live Detector",
+        "status": "ok" if m is not None else "model_error",
+        "service": "Indian Food Live Detector (YOLO 26l)",
+        "model_loaded": m is not None,
+        "model_error": model_load_error,
         "classes_count": len(CLASS_NAMES),
         "classes": CLASS_NAMES,
     }
@@ -143,8 +209,12 @@ async def health_check():
 
 @app.get("/api/info")
 async def get_model_info():
+    m = load_model_instance()
     return {
         "model": os.path.basename(MODEL_PATH),
+        "architecture": "YOLO26l",
+        "loaded": m is not None,
+        "error": model_load_error,
         "classes": CLASS_NAMES,
         "colors": CLASS_COLORS,
     }
@@ -160,10 +230,11 @@ async def predict_from_file(
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
-        res = run_yolo_detection(image, conf=conf, iou=iou, return_annotated=return_annotated)
+        res = run_yolo_detection(image, conf=conf, iou=iou, return_annotated=return_annotated, imgsz=640)
         return JSONResponse(res)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
+        print(f"Prediction error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 @app.post("/api/predict-frame")
@@ -178,14 +249,17 @@ async def predict_from_frame(payload: Base64DetectRequest):
             image,
             conf=payload.conf or 0.25,
             iou=payload.iou or 0.45,
-            return_annotated=payload.return_annotated or False
+            return_annotated=payload.return_annotated or False,
+            imgsz=payload.imgsz or 480
         )
         return JSONResponse(res)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Frame processing failed: {str(e)}")
+        print(f"Frame error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
     import uvicorn
+    # Render passes port via $PORT
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=port)

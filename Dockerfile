@@ -1,10 +1,9 @@
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    PORT=8000
+    DEBIAN_FRONTEND=noninteractive
 
-# Install OpenCV system dependencies
+# Install system libraries for OpenCV and PyTorch
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
@@ -13,14 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install lightweight CPU-only PyTorch first
+RUN pip install --no-cache-dir --upgrade pip
+
+# Install lightweight CPU-only PyTorch
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# Copy and install Python requirements
+# Install requirements including ultralytics for YOLO26
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source & model
+# Copy application files & model
 COPY . .
 
 EXPOSE 8000

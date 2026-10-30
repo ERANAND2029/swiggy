@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Indian Food Live Detector | AI Vision</title>
+  <title>Indian Food Live Detector | YOLO 26l</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script>
@@ -59,21 +59,34 @@
           <h1 class="font-extrabold text-lg leading-tight bg-gradient-to-r from-orange-400 via-amber-200 to-yellow-400 bg-clip-text text-transparent">
             FoodVision Live
           </h1>
-          <p class="text-xs text-slate-400">YOLO Indian Food Detection</p>
+          <p class="text-xs text-slate-400">YOLO 26l Custom Model</p>
         </div>
       </div>
 
       <div class="flex items-center space-x-3">
-        <span id="server-status" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Ready
+        <span id="server-status" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          Checking...
         </span>
-        <a href="#info-modal" onclick="toggleModal(true)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition" title="Model Classes">
+        <button onclick="toggleModal(true)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition" title="Model Classes">
           <i class="fa-solid fa-circle-info text-lg"></i>
-        </a>
+        </button>
       </div>
     </div>
   </header>
+
+  <!-- Error alert banner (hidden by default) -->
+  <div id="error-banner" class="max-w-6xl w-full mx-auto px-4 pt-3 hidden">
+    <div class="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center justify-between">
+      <span id="error-message" class="flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation text-red-400"></i>
+        <span>Model issue detected.</span>
+      </span>
+      <button onclick="document.getElementById('error-banner').classList.add('hidden')" class="text-red-400 hover:text-white">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </div>
 
   <!-- Main Container -->
   <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
@@ -108,7 +121,7 @@
             </div>
             <div>
               <p class="font-semibold text-slate-200 text-base">Camera is turned off</p>
-              <p class="text-xs text-slate-400 mt-1 max-w-xs">Click below to start live stream detection. Works on both mobile back camera & PC webcam!</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-xs">Supports mobile back/front camera & PC webcam. Click below to start detection!</p>
             </div>
             <button onclick="startCamera()" class="px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/25 transition transform active:scale-95 flex items-center gap-2">
               <i class="fa-solid fa-play"></i>
@@ -148,7 +161,7 @@
             </button>
           </div>
 
-          <!-- Speed & Sensitivity Controls -->
+          <!-- Sensitivity & Speed Controls -->
           <div class="flex items-center gap-3 text-xs text-slate-300">
             <div class="flex items-center gap-1.5">
               <label for="conf-slider" class="text-slate-400">Conf:</label>
@@ -156,11 +169,11 @@
               <span id="conf-val" class="font-mono text-orange-400 w-8">0.25</span>
             </div>
             <div class="flex items-center gap-1.5">
-              <label for="speed-select" class="text-slate-400">Speed:</label>
+              <label for="speed-select" class="text-slate-400">Interval:</label>
               <select id="speed-select" onchange="changeSpeed(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-orange-500">
-                <option value="180">Fast (~5 FPS)</option>
-                <option value="300" selected>Balanced (~3 FPS)</option>
-                <option value="600">Eco (~1.5 FPS)</option>
+                <option value="200">200ms (~5 FPS)</option>
+                <option value="350" selected>350ms (~3 FPS)</option>
+                <option value="600">600ms (~1.5 FPS)</option>
               </select>
             </div>
           </div>
@@ -173,7 +186,7 @@
             Live Detected Items:
           </p>
           <div id="live-chips" class="flex flex-wrap gap-2">
-            <span class="text-xs text-slate-500 italic">No food detected yet... Point your camera at a food item!</span>
+            <span class="text-xs text-slate-500 italic">No food detected yet... Point your camera at food!</span>
           </div>
         </div>
 
@@ -228,7 +241,7 @@
                 <img id="upload-annotated-img" src="" class="w-full max-h-96 object-contain rounded-lg bg-black/40">
                 <div id="upload-loader" class="absolute inset-0 bg-slate-950/80 rounded-lg flex flex-col items-center justify-center text-orange-400 space-y-2 hidden">
                   <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
-                  <span class="text-xs font-semibold">Running AI Model...</span>
+                  <span class="text-xs font-semibold">Running YOLO 26l Inference...</span>
                 </div>
               </div>
             </div>
@@ -238,7 +251,6 @@
           <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-3">Found Items Breakdown</p>
             <div id="upload-breakdown" class="flex flex-wrap gap-2">
-              <!-- Dynamically populated -->
             </div>
           </div>
 
@@ -252,12 +264,11 @@
       <div class="flex items-center justify-between mb-3">
         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <i class="fa-solid fa-list-check text-orange-400"></i>
-          Detectable Food Classes (8 Classes in Model)
+          Model Classes (8 Classes in YOLO 26l)
         </h4>
-        <span class="text-xs text-slate-500 font-mono">YOLOv8 Custom Model</span>
+        <span class="text-xs text-slate-500 font-mono">detectanand.pt</span>
       </div>
       <div id="classes-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <!-- Classes chips injected via JS -->
       </div>
     </div>
 
@@ -274,18 +285,17 @@
           <i class="fa-solid fa-microchip"></i>
         </div>
         <div>
-          <h3 class="font-bold text-slate-100">About Model & Deployment</h3>
-          <p class="text-xs text-slate-400">Render Free Tier Ready</p>
+          <h3 class="font-bold text-slate-100">YOLO 26l Model Info</h3>
+          <p class="text-xs text-slate-400">Indian Food Vision Detector</p>
         </div>
       </div>
       <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
-        <p>This web app is custom-built for your Indian Food YOLO model (<code class="bg-slate-800 px-1 py-0.5 rounded text-orange-300">detectanand.pt</code>).</p>
-        <p><strong class="text-slate-100">Render Deployment Highlights:</strong></p>
+        <p>This web service runs your trained <code class="bg-slate-800 px-1 py-0.5 rounded text-orange-300">YOLO26l</code> checkpoint (<code class="bg-slate-800 px-1 py-0.5 rounded text-orange-300">detectanand.pt</code>).</p>
+        <p><strong class="text-slate-100">Optimization:</strong></p>
         <ul class="list-disc pl-4 space-y-1 text-slate-400">
-          <li>Super-fast async FastAPI backend.</li>
-          <li>Optimized for low-RAM (~200MB memory footprint).</li>
-          <li>Client-side canvas rendering prevents network frame choking.</li>
-          <li>Mobile camera orientation friendly.</li>
+          <li>Gradient disabled for 50% memory saving.</li>
+          <li>Optimized 480px frame input for real-time live video streams.</li>
+          <li>Compatible with Render Free Tier (512MB RAM).</li>
         </ul>
       </div>
       <button onclick="toggleModal(false)" class="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
@@ -324,17 +334,15 @@
     let currentTab = 'camera';
     let isCameraActive = false;
     let videoStream = null;
-    let cameraFacing = 'environment'; // 'environment' (back) or 'user' (front)
+    let cameraFacing = 'environment';
     let detectionIntervalId = null;
     let isDetectingFrame = false;
     let confidenceThreshold = 0.25;
-    let detectionSpeedMs = 300;
+    let detectionSpeedMs = 350;
     
-    // FPS and Latency calculation
     let frameTimes = [];
     let lastInferenceMs = 0;
 
-    // Elements
     const video = document.getElementById('webcam');
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
@@ -346,7 +354,6 @@
     const liveChips = document.getElementById('live-chips');
     const btnToggleText = document.getElementById('btn-toggle-text');
 
-    // Class Colors & Metadata
     const CLASS_METADATA = {
       'chillipotato': { label: 'Chilli Potato', icon: '🌶️', color: '#ef4444' },
       'dosa': { label: 'Dosa', icon: '🥞', color: '#f59e0b' },
@@ -358,7 +365,6 @@
       'vada pav': { label: 'Vada Pav', icon: '🍔', color: '#8b5cf6' }
     };
 
-    // Initialize UI
     window.addEventListener('DOMContentLoaded', () => {
       renderClassCatalog();
       checkServerStatus();
@@ -368,17 +374,31 @@
       try {
         const res = await fetch('/health');
         if (res.ok) {
-          document.getElementById('server-status').innerHTML = `
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Online
-          `;
+          const data = await res.json();
+          if (data.model_loaded) {
+            document.getElementById('server-status').innerHTML = `
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              YOLO 26l Online
+            `;
+            document.getElementById('server-status').className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+          } else {
+            showErrorBanner("Model not loaded yet: " + (data.model_error || "Please wait"));
+          }
         }
       } catch (err) {
         document.getElementById('server-status').innerHTML = `
           <span class="w-2 h-2 rounded-full bg-red-400"></span>
           Offline
         `;
+        document.getElementById('server-status').className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20';
       }
+    }
+
+    function showErrorBanner(msg) {
+      const banner = document.getElementById('error-banner');
+      const msgEl = document.getElementById('error-message');
+      msgEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-400"></i> <span>${msg}</span>`;
+      banner.classList.remove('hidden');
     }
 
     function renderClassCatalog() {
@@ -415,26 +435,27 @@
         camBtn.className = 'flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition text-slate-400 hover:text-white';
         uploadSec.classList.remove('hidden');
         camSec.classList.add('hidden');
-        // Pause camera if user switched to upload tab
-        if (isCameraActive) {
-          stopCamera();
-        }
+        if (isCameraActive) stopCamera();
       }
     }
 
-    // Camera Controls
+    // Camera with automatic fallback
     async function startCamera() {
       try {
-        const constraints = {
-          video: {
-            facingMode: cameraFacing,
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        };
+        let stream = null;
+        try {
+          // Try preferred facing mode first
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+        } catch (e1) {
+          // Fallback to basic video for desktop or strict browsers
+          console.warn("FacingMode constraint failed, falling back to basic video:", e1);
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
 
-        videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoStream = stream;
         video.srcObject = videoStream;
         video.classList.remove('hidden');
         camPlaceholder.classList.add('hidden');
@@ -450,7 +471,7 @@
 
       } catch (err) {
         console.error("Camera access error:", err);
-        alert("Camera permission denied or camera not found: " + err.message);
+        showErrorBanner("Camera permission denied or camera not found: " + err.message);
       }
     }
 
@@ -474,11 +495,8 @@
     }
 
     function toggleCamera() {
-      if (isCameraActive) {
-        stopCamera();
-      } else {
-        startCamera();
-      }
+      if (isCameraActive) stopCamera();
+      else startCamera();
     }
 
     async function switchCameraDirection() {
@@ -505,9 +523,7 @@
 
     function changeSpeed(ms) {
       detectionSpeedMs = parseInt(ms);
-      if (isCameraActive) {
-        startDetectionLoop();
-      }
+      if (isCameraActive) startDetectionLoop();
     }
 
     function updateConf(val) {
@@ -515,7 +531,7 @@
       document.getElementById('conf-val').textContent = val;
     }
 
-    // Frame Capture & API Call
+    // Downscale frame to 480px for high performance on Render
     async function processCameraFrame() {
       if (!isCameraActive || isDetectingFrame || video.readyState < 2) return;
 
@@ -523,17 +539,16 @@
       const tStart = performance.now();
 
       try {
-        // Draw current frame to offscreen canvas
         const offCanvas = document.createElement('canvas');
-        // Downscale slightly for super-fast network & inference
-        const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
-        offCanvas.width = video.videoWidth * scale;
-        offCanvas.height = video.videoHeight * scale;
+        const maxDim = 480;
+        const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+        offCanvas.width = Math.round(video.videoWidth * scale);
+        offCanvas.height = Math.round(video.videoHeight * scale);
+        
         const offCtx = offCanvas.getContext('2d');
         offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
 
-        // Get JPEG base64 with moderate quality
-        const dataUrl = offCanvas.toDataURL('image/jpeg', 0.75);
+        const dataUrl = offCanvas.toDataURL('image/jpeg', 0.70);
 
         const response = await fetch('/api/predict-frame', {
           method: 'POST',
@@ -541,35 +556,37 @@
           body: JSON.stringify({
             image: dataUrl,
             conf: confidenceThreshold,
-            return_annotated: false
+            return_annotated: false,
+            imgsz: 480
           })
         });
 
         if (response.ok) {
           const data = await response.json();
-          lastInferenceMs = data.inference_ms || Math.round(performance.now() - tStart);
-          renderDetectionsOnCanvas(data.detections || []);
-          updateLiveChips(data.count_by_class || {}, data.detections || []);
-          updateHudStats(tStart);
+          if (data.success) {
+            lastInferenceMs = data.inference_ms || Math.round(performance.now() - tStart);
+            renderDetectionsOnCanvas(data.detections || []);
+            updateLiveChips(data.count_by_class || {}, data.detections || []);
+            updateHudStats(tStart);
+          } else if (data.error) {
+            showErrorBanner("Inference error: " + data.error);
+          }
         }
       } catch (err) {
-        console.warn("Detection frame error:", err);
+        console.warn("Frame request error:", err);
       } finally {
         isDetectingFrame = false;
       }
     }
 
-    // Render Canvas Boxes
     function renderDetectionsOnCanvas(detections) {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
-
       if (!detections || detections.length === 0) return;
 
       const w = overlay.width;
       const h = overlay.height;
 
       detections.forEach(det => {
-        // box_norm: [x1, y1, x2, y2] in 0..1 range
         const [nx1, ny1, nx2, ny2] = det.box_norm;
         const x1 = nx1 * w;
         const y1 = ny1 * h;
@@ -579,17 +596,13 @@
         const color = det.color || '#f97316';
         const meta = CLASS_METADATA[det.class_name.toLowerCase()] || { icon: '🍽️', label: det.class_name };
 
-        // Draw Bounding Box
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = Math.max(2, Math.round(w / 300));
+        ctx.lineWidth = Math.max(2, Math.round(w / 320));
         ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-
-        // Rounded rect for nice modern look
+        ctx.shadowBlur = 6;
         ctx.strokeRect(x1, y1, bw, bh);
 
-        // Draw Label Badge
         const labelText = `${meta.icon} ${meta.label} ${Math.round(det.confidence * 100)}%`;
         ctx.font = `bold ${Math.max(12, Math.round(w / 45))}px sans-serif`;
         const textWidth = ctx.measureText(labelText).width;
@@ -633,10 +646,7 @@
 
     function updateHudStats(frameStartTime) {
       const now = performance.now();
-      const totalFrameTime = now - frameStartTime;
       frameTimes.push(now);
-
-      // Keep last 10 frames
       if (frameTimes.length > 10) frameTimes.shift();
 
       let fps = 0;
@@ -649,7 +659,6 @@
       hudFps.textContent = `${fps} FPS`;
     }
 
-    // Snapshot Functionality
     function takeSnapshot() {
       if (!isCameraActive || video.readyState < 2) return;
 
@@ -658,9 +667,7 @@
       snapCanvas.height = video.videoHeight;
       const snapCtx = snapCanvas.getContext('2d');
 
-      // Draw base video
       snapCtx.drawImage(video, 0, 0);
-      // Draw detection overlay
       snapCtx.drawImage(overlay, 0, 0);
 
       const dataUrl = snapCanvas.toDataURL('image/jpeg', 0.95);
@@ -685,7 +692,6 @@
       const inferTime = document.getElementById('upload-infer-time');
       const breakdown = document.getElementById('upload-breakdown');
 
-      // Show local preview
       origImg.src = URL.createObjectURL(file);
       annoImg.src = origImg.src;
       container.classList.remove('hidden');
@@ -704,19 +710,20 @@
 
         if (res.ok) {
           const result = await res.json();
-          inferTime.textContent = `${result.inference_ms} ms`;
-
-          if (result.annotated_image) {
-            annoImg.src = result.annotated_image;
+          if (!result.success) {
+            showErrorBanner("Detection error: " + (result.error || "Unknown error"));
+            return;
           }
 
-          // Populate Breakdown
+          inferTime.textContent = `${result.inference_ms} ms`;
+          if (result.annotated_image) annoImg.src = result.annotated_image;
+
           breakdown.innerHTML = '';
           const counts = result.count_by_class || {};
           const keys = Object.keys(counts);
 
           if (keys.length === 0) {
-            breakdown.innerHTML = '<span class="text-xs text-slate-400 italic">No food items detected in this image. Try lowering the confidence slider!</span>';
+            breakdown.innerHTML = '<span class="text-xs text-slate-400 italic">No food items detected. Lower the confidence slider and retry!</span>';
           } else {
             keys.forEach(cls => {
               const count = counts[cls];
@@ -733,11 +740,10 @@
             });
           }
         } else {
-          alert("Detection failed on this file. Please check file format.");
+          showErrorBanner("Server response error (" + res.status + ")");
         }
       } catch (err) {
-        console.error("Upload error:", err);
-        alert("Upload error: " + err.message);
+        showErrorBanner("Upload failed: " + err.message);
       } finally {
         loader.classList.add('hidden');
       }
